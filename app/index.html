@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>SpanishKB Study</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark">
+  <div id="app">
+    <header id="topbar">
+      <div class="topbar-left">
+        <button id="topbar-back" class="icon-btn" onclick="SKB.goHome()" style="display:none">&larr;</button>
+        <h1 id="topbar-title">SpanishKB Study</h1>
+      </div>
+      <button id="dark-toggle" class="icon-btn" onclick="SKB.toggleDark()">&#9790;</button>
+    </header>
+
+    <main id="main">
+      <!-- HOME VIEW -->
+      <div id="view-home" class="view active">
+        <div id="home-greeting" class="greeting"></div>
+        <div id="home-streak" class="streak-badge"></div>
+        <div class="mode-grid">
+          <button class="mode-card" onclick="SKB.startMode('vocab')">
+            <div class="mode-icon">&#128218;</div>
+            <div class="mode-name">Vocab Flash</div>
+            <div class="mode-progress" id="home-vocab-progress">0 / 5,000</div>
+          </button>
+          <button class="mode-card" onclick="SKB.startMode('conjugation')">
+            <div class="mode-icon">&#9999;</div>
+            <div class="mode-name">Verb Drill</div>
+            <div class="mode-progress" id="home-conj-progress">0 / 0</div>
+          </button>
+          <button class="mode-card" onclick="SKB.startMode('medvocab')">
+            <div class="mode-icon">&#127973;</div>
+            <div class="mode-name">Medical Vocab</div>
+            <div class="mode-progress" id="home-medvocab-progress">0 / 0</div>
+          </button>
+          <button class="mode-card" onclick="SKB.startMode('medphrase')">
+            <div class="mode-icon">&#128172;</div>
+            <div class="mode-name">Medical Phrases</div>
+            <div class="mode-progress" id="home-medphrase-progress">0 / 0</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- PRACTICE VIEW -->
+      <div id="view-practice" class="view">
+        <div id="practice-header">
+          <div id="practice-mode-label"></div>
+          <div id="practice-counter"></div>
+        </div>
+        <div id="card-container" onclick="SKB.flipCard()">
+          <div id="card-inner">
+            <div id="card-front" class="card-face">
+              <div id="card-badge" class="card-badge" style="display:none"></div>
+              <div id="card-prompt" class="card-prompt"></div>
+              <div id="card-hint" class="card-hint"></div>
+              <div class="card-tap">Tap to reveal</div>
+            </div>
+            <div id="card-back" class="card-face">
+              <div id="card-answer" class="card-answer"></div>
+              <div id="card-detail" class="card-detail"></div>
+              <div id="card-example" class="card-example"></div>
+            </div>
+          </div>
+        </div>
+        <div id="rating-row" style="display:none">
+          <button class="rating-btn know" onclick="SKB.rate('know')">&#10003; Know</button>
+          <button class="rating-btn practice" onclick="SKB.rate('need-practice')">&#126; Practice</button>
+          <button class="rating-btn dont-know" onclick="SKB.rate('dont-know')">&#10007; Don't Know</button>
+        </div>
+      </div>
+
+      <!-- SUMMARY VIEW -->
+      <div id="view-summary" class="view">
+        <div id="summary-content"></div>
+      </div>
+
+      <!-- PROGRESS VIEW -->
+      <div id="view-progress" class="view">
+        <div id="progress-content"></div>
+      </div>
+
+      <!-- SETTINGS VIEW -->
+      <div id="view-settings" class="view">
+        <div id="settings-content"></div>
+      </div>
+    </main>
+
+    <nav id="navbar">
+      <button class="nav-btn active" data-view="home" onclick="SKB.showView('home')">
+        <span class="nav-icon">&#127968;</span>
+        <span class="nav-label">Home</span>
+      </button>
+      <button class="nav-btn" data-view="progress" onclick="SKB.showView('progress')">
+        <span class="nav-icon">&#128200;</span>
+        <span class="nav-label">Progress</span>
+      </button>
+      <button class="nav-btn" data-view="settings" onclick="SKB.showView('settings')">
+        <span class="nav-icon">&#9881;</span>
+        <span class="nav-label">Settings</span>
+      </button>
+    </nav>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(function(){});
+    }
+  </script>
+</body>
+</html>
