@@ -435,6 +435,11 @@
     document.getElementById('practice-counter').textContent =
       (session.currentIndex + 1) + ' / ' + session.cards.length;
 
+    // Clear back face BEFORE unflipping to prevent flash of previous answer
+    document.getElementById('card-answer').textContent = '';
+    document.getElementById('card-detail').textContent = '';
+    document.getElementById('card-example').textContent = '';
+
     // Reset flip state
     var cardInner = document.getElementById('card-inner');
     cardInner.classList.remove('flipped');
