@@ -213,27 +213,55 @@ def parse_verb_file(filepath):
 
     return verb_name, cards
 
-def export_conjugations():
-    """Parse all individual verb files in Verbos/ for conjugation cards."""
+def export_conjugations(vocab_words=None):
+    """
+    Generate conjugation cards from two sources:
+    1. Hand-written Verbos/*.md files (highest priority, verified forms)
+    2. Auto-conjugated verbs from vocabulary (using conjugation engine)
+    """
+    from conjugator import conjugate_to_cards, get_verb_group
+
     all_cards = []
-    if not VERBOS_PATH.exists():
-        print(f"  WARNING: {VERBOS_PATH} not found, skipping conjugations")
-        return all_cards
+    hand_written_verbs = set()
 
-    # Only parse individual verb files, not pattern overviews
-    skip_files = {
-        'regular -ar verbs.md', 'regular -er verbs.md', 'regular -ir verbs.md',
-        'stem-changing verbs.md', 'spelling-change verbs.md', 'reflexive verbs.md'
-    }
+    # --- Source 1: Hand-written verb files ---
+    if VERBOS_PATH.exists():
+        skip_files = {
+            'regular -ar verbs.md', 'regular -er verbs.md', 'regular -ir verbs.md',
+            'stem-changing verbs.md', 'spelling-change verbs.md', 'reflexive verbs.md'
+        }
+        for md_file in sorted(VERBOS_PATH.glob("*.md")):
+            if md_file.name.lower() in skip_files:
+                continue
+            verb_name, cards = parse_verb_file(md_file)
+            if cards:
+                all_cards.extend(cards)
+                hand_written_verbs.add(verb_name)
+        print(f"  Hand-written conjugations: {len(all_cards)} cards from {len(hand_written_verbs)} verbs")
 
-    for md_file in sorted(VERBOS_PATH.glob("*.md")):
-        if md_file.name.lower() in skip_files:
-            continue
-        verb_name, cards = parse_verb_file(md_file)
-        if cards:
-            all_cards.extend(cards)
+    # --- Source 2: Auto-conjugate verbs from vocabulary ---
+    if vocab_words:
+        auto_count = 0
+        auto_verbs = 0
+        for w in vocab_words:
+            if w.get('type') not in ('v', 'v/aux'):
+                continue
+            infinitive = w['es'].split(',')[0].strip()  # take first if multiple
+            # Skip if hand-written version exists
+            if infinitive.lower() in hand_written_verbs:
+                continue
+            # Skip if not a valid verb form
+            if not get_verb_group(infinitive):
+                continue
+            cards = conjugate_to_cards(infinitive, w.get('en', ''))
+            if cards:
+                all_cards.extend(cards)
+                auto_verbs += 1
+                auto_count += len(cards)
+        print(f"  Auto-conjugated: {auto_count} cards from {auto_verbs} verbs")
 
-    print(f"  Conjugations: {len(all_cards)} cards from {len(set(c['verb'] for c in all_cards))} verbs")
+    total_verbs = len(set(c['verb'] for c in all_cards))
+    print(f"  Total conjugations: {len(all_cards)} cards from {total_verbs} verbs")
     return all_cards
 
 # ============================================================
@@ -328,7 +356,7 @@ def main():
 
     print("\nExporting...")
     words = export_vocabulary()
-    conjugations = export_conjugations()
+    conjugations = export_conjugations(vocab_words=words)
     med_vocab, med_phrases = harvest_medical_content()
 
     data = {

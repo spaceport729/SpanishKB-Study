@@ -523,10 +523,10 @@
 
     } else if (mode === 'conjugation') {
       prompt.innerHTML =
-        '<span style="font-size:20px;color:var(--text-muted)">' +
-        escapeHtml(item.verb) + '</span><br>' +
+        '<span style="font-size:18px;color:var(--text-muted)">' +
+        escapeHtml(item.verbEn || item.verb) + '</span><br>' +
         escapeHtml(item.tense) + ' \u00B7 ' + escapeHtml(item.person);
-      hint.textContent = item.verbEn || '';
+      hint.textContent = item.verb;
 
     } else if (mode === 'medvocab') {
       prompt.textContent = item.en;
