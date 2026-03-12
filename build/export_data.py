@@ -365,8 +365,8 @@ def harvest_medical_content():
                         continue
                     seen_spanish.add(sp_clean)
 
-                    word_count = len(spanish.split())
-                    target = med_vocab if word_count <= 2 else med_phrases
+                    # All Español Médico/ content is vocabulary
+                    target = med_vocab
                     target.append({
                         'es': spanish,
                         'en': english,
