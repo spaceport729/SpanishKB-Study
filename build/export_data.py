@@ -374,6 +374,76 @@ def harvest_medical_content():
                         'source': md_file.stem
                     })
 
+    # Also check ClinicalKB for Spanish Clinical Questions
+    CLINICAL_SPANISH = Path(r"C:\Users\stace\spaceport\ClinicalKB\Spanish Clinical Questions — ED Chief Complaints.md")
+    if CLINICAL_SPANISH.exists():
+        text = CLINICAL_SPANISH.read_text(encoding='utf-8')
+        current_category = 'General'
+        # Parse markdown tables: | English | Español |
+        TABLE_ROW = re.compile(r'^\|\s*(.+?)\s*\|\s*(.+?)\s*\|$')
+        # Parse vocab tables: | spanish: english | ... |
+        VOCAB_CELL = re.compile(r'([^|:]+):\s*([^|]+)')
+
+        for line in text.split('\n'):
+            # Track section headers
+            hm = re.match(r'^##\s+(.+)', line)
+            if hm:
+                current_category = hm.group(1).strip()
+                continue
+
+            # Skip table headers and separator rows
+            if '---' in line and '|' in line:
+                continue
+            if '| English' in line or '| Español' in line:
+                continue
+
+            # Parse vocab rows first (multi-cell format: | word: translation | word: translation |)
+            if current_category == 'Vocabulary' and '|' in line and ':' in line:
+                for cell_m in VOCAB_CELL.finditer(line):
+                    spanish = cell_m.group(1).strip()
+                    english = cell_m.group(2).strip()
+                    if not spanish or not english:
+                        continue
+                    sp_clean = spanish.lower().replace('¿', '').replace('?', '').strip()
+                    if sp_clean in seen_spanish:
+                        continue
+                    seen_spanish.add(sp_clean)
+                    med_vocab.append({
+                        'es': spanish,
+                        'en': english,
+                        'category': 'ED Vocabulary',
+                        'source': 'Spanish Clinical Questions'
+                    })
+                continue
+
+            # Parse two-column tables (English | Español)
+            tm = TABLE_ROW.match(line)
+            if tm:
+                english = tm.group(1).strip()
+                spanish = tm.group(2).strip()
+
+                # Skip empty cells or header-like content
+                if not english or not spanish:
+                    continue
+                if english.lower() in ('english', 'español', ''):
+                    continue
+
+                sp_clean = spanish.lower().replace('¿', '').replace('?', '').strip()
+                if sp_clean in seen_spanish:
+                    continue
+                seen_spanish.add(sp_clean)
+
+                med_phrases.append({
+                    'es': spanish,
+                    'en': english,
+                    'category': current_category,
+                    'source': 'Spanish Clinical Questions'
+                })
+
+        clinical_count = sum(1 for p in med_phrases if p['source'] == 'Spanish Clinical Questions')
+        clinical_vocab = sum(1 for v in med_vocab if v['source'] == 'Spanish Clinical Questions')
+        print(f"  Clinical Spanish: {clinical_count} phrases, {clinical_vocab} vocab terms")
+
     print(f"  Medical Vocab: {len(med_vocab)} terms")
     print(f"  Medical Phrases: {len(med_phrases)} phrases")
     return med_vocab, med_phrases
