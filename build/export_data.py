@@ -224,6 +224,14 @@ def export_conjugations(vocab_words=None):
     all_cards = []
     hand_written_verbs = set()
 
+    # Build verb→rank lookup from vocabulary
+    verb_ranks = {}
+    if vocab_words:
+        for w in vocab_words:
+            if w.get('type') in ('v', 'v/aux'):
+                inf = w['es'].split(',')[0].strip().lower()
+                verb_ranks[inf] = w.get('rank', 9999)
+
     # --- Source 1: Hand-written verb files ---
     if VERBOS_PATH.exists():
         skip_files = {
@@ -235,6 +243,18 @@ def export_conjugations(vocab_words=None):
                 continue
             verb_name, cards = parse_verb_file(md_file)
             if cards:
+                # Assign frequency rank to hand-written cards too
+                rank = verb_ranks.get(verb_name, 9999)
+                tense_priority = {
+                    'presente': 0, 'pretérito': 1, 'imperfecto': 2,
+                    'futuro': 3, 'condicional': 4, 'subjuntivo': 5
+                }
+                person_idx = {p: i for i, p in enumerate(
+                    ['yo', 'tú', 'él/ella/Ud.', 'nosotros', 'vosotros', 'ellos/Uds.']
+                )}
+                for c in cards:
+                    c['rank'] = rank
+                    c['sortKey'] = rank * 100 + tense_priority.get(c['tense'], 9) * 10 + person_idx.get(c['person'], 0)
                 all_cards.extend(cards)
                 hand_written_verbs.add(verb_name)
         print(f"  Hand-written conjugations: {len(all_cards)} cards from {len(hand_written_verbs)} verbs")
@@ -253,15 +273,26 @@ def export_conjugations(vocab_words=None):
             # Skip if not a valid verb form
             if not get_verb_group(infinitive):
                 continue
-            cards = conjugate_to_cards(infinitive, w.get('en', ''))
+            cards = conjugate_to_cards(infinitive, w.get('en', ''), rank=w.get('rank', 9999))
             if cards:
                 all_cards.extend(cards)
                 auto_verbs += 1
                 auto_count += len(cards)
         print(f"  Auto-conjugated: {auto_count} cards from {auto_verbs} verbs")
 
+    # Sort by frequency rank, then tense priority, then person
+    all_cards.sort(key=lambda c: c.get('sortKey', 999999))
+
     total_verbs = len(set(c['verb'] for c in all_cards))
     print(f"  Total conjugations: {len(all_cards)} cards from {total_verbs} verbs")
+    # Show top verbs for verification
+    seen = []
+    for c in all_cards:
+        if c['verb'] not in seen:
+            seen.append(c['verb'])
+            if len(seen) >= 10:
+                break
+    print(f"  Top 10 by frequency: {', '.join(seen)}")
     return all_cards
 
 # ============================================================

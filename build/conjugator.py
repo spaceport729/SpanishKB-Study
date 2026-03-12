@@ -550,10 +550,10 @@ def conjugate(infinitive):
     return result
 
 
-def conjugate_to_cards(infinitive, english=''):
+def conjugate_to_cards(infinitive, english='', rank=9999):
     """
     Generate study cards for a verb.
-    Returns list of card dicts.
+    Returns list of card dicts with frequency rank for ordering.
     """
     forms = conjugate(infinitive)
     if not forms:
@@ -561,19 +561,28 @@ def conjugate_to_cards(infinitive, english=''):
 
     cards = []
     tense_order = ['presente', 'pretérito', 'imperfecto', 'futuro', 'condicional', 'subjuntivo']
+    # Tense priority: presente first (most useful), then past tenses, then rest
+    tense_priority = {
+        'presente': 0, 'pretérito': 1, 'imperfecto': 2,
+        'futuro': 3, 'condicional': 4, 'subjuntivo': 5
+    }
 
     for tense in tense_order:
         if tense not in forms:
             continue
-        for person in PERSONS:
+        for pi, person in enumerate(PERSONS):
             form = forms[tense].get(person)
             if form:
+                # Sort key: verb frequency first, then tense priority, then person
+                sort_key = rank * 100 + tense_priority.get(tense, 9) * 10 + pi
                 cards.append({
                     'verb': infinitive,
                     'verbEn': english,
                     'tense': tense,
                     'person': person,
                     'form': form,
+                    'rank': rank,
+                    'sortKey': sort_key,
                     'id': f"{infinitive}-{tense}-{person}"
                 })
     return cards
