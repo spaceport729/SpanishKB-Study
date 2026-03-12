@@ -51,7 +51,6 @@
   var DEFAULT_SETTINGS = {
     deckSize: 20,
     masteryThreshold: 3,
-    masteryChecksPerSession: 3,
     showType: true,
     showExample: true
   };
@@ -216,12 +215,10 @@
       }
     });
 
-    // Add mastery check items (random sample from mastered pool)
+    // Add mastery check items (5% of deck size, min 1 if any mastered)
     var masteredIds = Object.keys(engine.mastered);
-    var checksCount = Math.min(
-      settings.masteryChecksPerSession || 3,
-      masteredIds.length
-    );
+    var checksTarget = Math.max(1, Math.round((settings.deckSize || 20) * 0.05));
+    var checksCount = Math.min(checksTarget, masteredIds.length);
     var shuffledMastered = shuffle(masteredIds);
     for (var i = 0; i < checksCount; i++) {
       var id = shuffledMastered[i];
@@ -817,7 +814,7 @@
       '<span class="setting-label">Deck Size</span>' +
       '<div style="display:flex;align-items:center;gap:8px">' +
       '<input type="range" class="setting-slider" id="s-decksize" ' +
-      'min="10" max="40" value="' + settings.deckSize + '" ' +
+      'min="10" max="250" step="5" value="' + settings.deckSize + '" ' +
       'oninput="SKB.updateSetting(\'deckSize\', this.value)">' +
       '<span class="setting-value" id="v-decksize">' + settings.deckSize + '</span>' +
       '</div></div>' +
@@ -833,12 +830,8 @@
 
       '<div class="setting-row">' +
       '<span class="setting-label">Mastery Checks / Session</span>' +
-      '<div style="display:flex;align-items:center;gap:8px">' +
-      '<input type="range" class="setting-slider" id="s-checks" ' +
-      'min="0" max="5" value="' + settings.masteryChecksPerSession + '" ' +
-      'oninput="SKB.updateSetting(\'masteryChecksPerSession\', this.value)">' +
-      '<span class="setting-value" id="v-checks">' + settings.masteryChecksPerSession + '</span>' +
-      '</div></div>' +
+      '<span class="setting-value" id="v-checks">~' + Math.max(1, Math.round(settings.deckSize * 0.05)) + ' (5% of deck)</span>' +
+      '</div>' +
       '</div>' +
 
       '<div class="setting-group">' +
@@ -870,11 +863,16 @@
 
     var labels = {
       deckSize: 'v-decksize',
-      masteryThreshold: 'v-mastery',
-      masteryChecksPerSession: 'v-checks'
+      masteryThreshold: 'v-mastery'
     };
     var el = document.getElementById(labels[key]);
     if (el) el.textContent = value;
+
+    // Update mastery checks display when deck size changes
+    if (key === 'deckSize') {
+      var checksEl = document.getElementById('v-checks');
+      if (checksEl) checksEl.textContent = '~' + Math.max(1, Math.round(value * 0.05)) + ' (5% of deck)';
+    }
   }
 
   function toggleSetting(key) {
