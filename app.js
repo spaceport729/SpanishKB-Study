@@ -435,14 +435,13 @@
     document.getElementById('practice-counter').textContent =
       (session.currentIndex + 1) + ' / ' + session.cards.length;
 
-    // Clear back face BEFORE unflipping to prevent flash of previous answer
-    document.getElementById('card-answer').textContent = '';
-    document.getElementById('card-detail').textContent = '';
-    document.getElementById('card-example').textContent = '';
-
-    // Reset flip state
+    // Snap back to front instantly (no animation) to prevent flash of previous answer
     var cardInner = document.getElementById('card-inner');
+    cardInner.style.transition = 'none';
     cardInner.classList.remove('flipped');
+    // Force browser to apply the style change before re-enabling transition
+    void cardInner.offsetHeight;
+    cardInner.style.transition = '';
     session.flipped = false;
 
     // Hide rating buttons
