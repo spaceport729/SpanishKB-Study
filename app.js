@@ -247,90 +247,29 @@
   }
 
   function processSessionResults() {
+    // Ratings were already processed incrementally in processOneRating().
+    // This function now just tallies results for the summary screen.
     if (!session) return { promoted: [], demoted: [] };
 
     var engine = getEngine(session.mode);
-    var threshold = settings.masteryThreshold || 3;
     var promoted = [];
     var demoted = [];
 
-    // Build card lookup for mastery check flag
+    // Check which items were promoted/demoted during this session
     var cardMap = {};
     session.cards.forEach(function (c) { cardMap[c.id] = c; });
 
-    // Process each rating
     Object.keys(session.ratings).forEach(function (id) {
       var rating = session.ratings[id];
       var card = cardMap[id];
       if (!card) return;
 
-      if (card.isMasteryCheck) {
-        // === MASTERY CHECK CARD ===
-        if (rating === 'dont-know') {
-          // Demote: move from mastered back to active deck
-          delete engine.mastered[id];
-          engine.deck[id] = { streak: 0, lastSeen: today(), timesRated: 1 };
-          demoted.push(id);
-        } else if (rating === 'know') {
-          // Passed check — stays mastered
-          if (engine.mastered[id]) {
-            engine.mastered[id].lastChecked = today();
-            engine.mastered[id].checkStreak =
-              (engine.mastered[id].checkStreak || 0) + 1;
-          }
-        }
-        // 'need-practice' on mastery check → no change (soft pass)
-
-      } else {
-        // === REGULAR DECK CARD ===
-        if (!engine.deck[id]) return;
-
-        engine.deck[id].lastSeen = today();
-        engine.deck[id].timesRated = (engine.deck[id].timesRated || 0) + 1;
-
-        if (rating === 'know') {
-          engine.deck[id].streak = (engine.deck[id].streak || 0) + 1;
-
-          // Check for promotion to mastered
-          if (engine.deck[id].streak >= threshold) {
-            engine.mastered[id] = {
-              masteredDate: today(),
-              lastChecked: null,
-              checkStreak: 0
-            };
-            delete engine.deck[id];
-            promoted.push(id);
-          }
-        } else if (rating === 'dont-know') {
-          engine.deck[id].streak = 0;
-        }
-        // 'need-practice' → streak unchanged (doesn't help or hurt)
+      if (card.isMasteryCheck && rating === 'dont-know') {
+        demoted.push(id);
+      } else if (!card.isMasteryCheck && rating === 'know' && engine.mastered[id]) {
+        promoted.push(id);
       }
     });
-
-    // Handle overflow: if demotions pushed deck over target size,
-    // bump the least-established item(s) to the overflow queue
-    var targetSize = settings.deckSize || engine.cfg.defaultDeck;
-    var deckEntries = Object.entries(engine.deck);
-    while (deckEntries.length > targetSize) {
-      // Sort: lowest streak first, then fewest times rated
-      deckEntries.sort(function (a, b) {
-        if (a[1].streak !== b[1].streak) return a[1].streak - b[1].streak;
-        return (a[1].timesRated || 0) - (b[1].timesRated || 0);
-      });
-      var toBump = deckEntries.shift();
-      engine.bumped.push({
-        id: toBump[0],
-        streak: toBump[1].streak,
-        lastSeen: toBump[1].lastSeen,
-        timesRated: toBump[1].timesRated
-      });
-      delete engine.deck[toBump[0]];
-    }
-
-    // Fill deck back to target size
-    ensureDeckFull(engine);
-    saveEngine(engine);
 
     return { promoted: promoted, demoted: demoted };
   }
@@ -620,6 +559,9 @@
     var card = session.cards[session.currentIndex];
     session.ratings[card.id] = rating;
 
+    // Process this rating IMMEDIATELY so progress is never lost
+    processOneRating(session.mode, card, rating);
+
     // Advance to next card
     session.currentIndex++;
 
@@ -628,6 +570,45 @@
     } else {
       renderPractice();
     }
+  }
+
+  function processOneRating(mode, card, rating) {
+    var engine = getEngine(mode);
+    var id = card.id;
+    var threshold = settings.masteryThreshold || 3;
+
+    if (card.isMasteryCheck) {
+      if (rating === 'dont-know') {
+        delete engine.mastered[id];
+        engine.deck[id] = { streak: 0, lastSeen: today(), timesRated: 1 };
+      } else if (rating === 'know' && engine.mastered[id]) {
+        engine.mastered[id].lastChecked = today();
+        engine.mastered[id].checkStreak =
+          (engine.mastered[id].checkStreak || 0) + 1;
+      }
+    } else {
+      if (!engine.deck[id]) return;
+      engine.deck[id].lastSeen = today();
+      engine.deck[id].timesRated = (engine.deck[id].timesRated || 0) + 1;
+
+      if (rating === 'know') {
+        engine.deck[id].streak = (engine.deck[id].streak || 0) + 1;
+        if (engine.deck[id].streak >= threshold) {
+          engine.mastered[id] = {
+            masteredDate: today(),
+            lastChecked: null,
+            checkStreak: 0
+          };
+          delete engine.deck[id];
+          // Immediately fill the empty slot
+          ensureDeckFull(engine);
+        }
+      } else if (rating === 'dont-know') {
+        engine.deck[id].streak = 0;
+      }
+    }
+
+    saveEngine(engine);
   }
 
   // ============================================================
