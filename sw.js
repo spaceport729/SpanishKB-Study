@@ -1,5 +1,5 @@
 /* SpanishKB Study — Service Worker (Network-first with offline fallback) */
-var CACHE_NAME = 'spanishkb-v3';
+var CACHE_NAME = 'spanishkb-v4';
 var ASSETS = [
   './',
   './index.html',

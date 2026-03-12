@@ -48,6 +48,11 @@
             <div class="mode-name">Medical Phrases</div>
             <div class="mode-progress" id="home-medphrase-progress">0 / 0</div>
           </button>
+          <button class="mode-card" onclick="SKB.startMode('expressions')">
+            <div class="mode-icon">&#128483;</div>
+            <div class="mode-name">Expresiones</div>
+            <div class="mode-progress" id="home-expr-progress">0 / 0</div>
+          </button>
         </div>
       </div>
 
@@ -111,7 +116,7 @@
     </nav>
   </div>
 
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(function(){});

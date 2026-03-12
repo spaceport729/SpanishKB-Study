@@ -1,6 +1,6 @@
 /* ============================================================
    SpanishKB Study PWA — App Logic
-   Adaptive deck engine with 4 practice modes
+   Adaptive deck engine with 5 practice modes
    ============================================================ */
 (function () {
   'use strict';
@@ -45,6 +45,14 @@
       defaultDeck: 15,
       getId: function (item) { return item.es; },
       getItems: function (data) { return data.medicalPhrases || []; }
+    },
+    expressions: {
+      namespace: 'expr',
+      label: 'Expresiones',
+      icon: '\uD83D\uDDE3\uFE0F',
+      defaultDeck: 15,
+      getId: function (item) { return item.es; },
+      getItems: function (data) { return data.expressions || []; }
     }
   };
 
@@ -429,7 +437,8 @@
       vocab:       'home-vocab-progress',
       conjugation: 'home-conj-progress',
       medvocab:    'home-medvocab-progress',
-      medphrase:   'home-medphrase-progress'
+      medphrase:   'home-medphrase-progress',
+      expressions: 'home-expr-progress'
     };
 
     Object.keys(modeMap).forEach(function (mode) {
@@ -532,6 +541,10 @@
     } else if (mode === 'medphrase') {
       prompt.textContent = item.en;
       hint.textContent = item.category || '';
+
+    } else if (mode === 'expressions') {
+      prompt.textContent = item.en;
+      hint.textContent = item.category || '';
     }
   }
 
@@ -575,6 +588,17 @@
       detail.textContent = item.en;
       if (item.source) {
         example.textContent = 'Source: ' + item.source;
+        example.style.display = '';
+      } else {
+        example.textContent = '';
+        example.style.display = 'none';
+      }
+
+    } else if (mode === 'expressions') {
+      answer.textContent = item.es;
+      detail.textContent = item.en;
+      if (item.category) {
+        example.textContent = item.category;
         example.style.display = '';
       } else {
         example.textContent = '';

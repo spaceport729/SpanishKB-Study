@@ -3,11 +3,12 @@
 SpanishKB Study PWA — Data Export Script
 Parses SpanishKB vault and exports data.json for the study app.
 
-Exports four data types:
-  1. words       — 5,000 frequency-ranked vocabulary from Vocabulario/*.md
+Exports five data types:
+  1. words        — 5,000 frequency-ranked vocabulary from Vocabulario/*.md
   2. conjugations — verb conjugation cards from Verbos/*.md
-  3. medicalVocab — medical vocabulary harvested from Verbos/ Medical Context sections
-  4. medicalPhrases — clinical phrases harvested from Verbos/ Medical Context sections
+  3. medicalVocab — medical vocabulary from Español Médico/ anatomy files
+  4. medicalPhrases — clinical phrases from Verbos/ + ClinicalKB
+  5. expressions  — idioms, conversational phrases, fillers from Expresiones files
 """
 
 import json
@@ -352,8 +353,14 @@ def harvest_medical_content():
     # Also check Español Médico/ folder for dedicated files
     if MEDICO_PATH.exists():
         for md_file in sorted(MEDICO_PATH.glob("*.md")):
+            # Skip Expresiones files — they go to expressions export
+            if md_file.stem.startswith('Expresiones'):
+                continue
             text = md_file.read_text(encoding='utf-8')
             category = md_file.stem  # filename as category
+
+            # Command/instruction files → phrases; everything else → vocab
+            is_phrases = 'Commands' in md_file.stem or 'Instructions' in md_file.stem
 
             for line in text.split('\n'):
                 m = MED_PHRASE.match(line)
@@ -365,8 +372,7 @@ def harvest_medical_content():
                         continue
                     seen_spanish.add(sp_clean)
 
-                    # All Español Médico/ content is vocabulary
-                    target = med_vocab
+                    target = med_phrases if is_phrases else med_vocab
                     target.append({
                         'es': spanish,
                         'en': english,
@@ -449,6 +455,57 @@ def harvest_medical_content():
     return med_vocab, med_phrases
 
 # ============================================================
+# 5. EXPRESSIONS
+# ============================================================
+EXPR_PATTERN = re.compile(
+    r'^-\s+\*\*(.+?)\*\*\s*—\s*(.+)$'
+)
+
+def export_expressions():
+    """Export expressions from Expresiones-*.md files in Español Médico/."""
+    expressions = []
+    seen = set()
+
+    if not MEDICO_PATH.exists():
+        return expressions
+
+    for md_file in sorted(MEDICO_PATH.glob("Expresiones*.md")):
+        text = md_file.read_text(encoding='utf-8')
+
+        # Get category from frontmatter or filename
+        fm = parse_frontmatter(text)
+        file_category = fm.get('category', md_file.stem.replace('Expresiones - ', ''))
+
+        current_section = file_category
+
+        for line in text.split('\n'):
+            # Track subsection headers
+            hm = re.match(r'^##\s+(.+)', line)
+            if hm:
+                current_section = hm.group(1).strip()
+                continue
+
+            m = EXPR_PATTERN.match(line)
+            if m:
+                spanish = m.group(1).strip()
+                english = m.group(2).strip()
+
+                sp_clean = spanish.lower().replace('¿', '').replace('?', '').replace('¡', '').replace('!', '').strip()
+                if sp_clean in seen:
+                    continue
+                seen.add(sp_clean)
+
+                expressions.append({
+                    'es': spanish,
+                    'en': english,
+                    'category': current_section,
+                    'source': md_file.stem
+                })
+
+    print(f"  Expressions: {len(expressions)} items")
+    return expressions
+
+# ============================================================
 # MAIN
 # ============================================================
 def main():
@@ -459,6 +516,7 @@ def main():
     words = export_vocabulary()
     conjugations = export_conjugations(vocab_words=words)
     med_vocab, med_phrases = harvest_medical_content()
+    expressions = export_expressions()
 
     data = {
         'meta': {
@@ -467,12 +525,14 @@ def main():
             'totalWords': len(words),
             'totalConjugations': len(conjugations),
             'totalMedVocab': len(med_vocab),
-            'totalMedPhrases': len(med_phrases)
+            'totalMedPhrases': len(med_phrases),
+            'totalExpressions': len(expressions)
         },
         'words': words,
         'conjugations': conjugations,
         'medicalVocab': med_vocab,
-        'medicalPhrases': med_phrases
+        'medicalPhrases': med_phrases,
+        'expressions': expressions
     }
 
     # Write output
@@ -488,6 +548,7 @@ def main():
     print(f"  Conjugations: {len(conjugations):,}")
     print(f"  Med Vocab:    {len(med_vocab):,}")
     print(f"  Med Phrases:  {len(med_phrases):,}")
+    print(f"  Expressions:  {len(expressions):,}")
     print(f"\nDone!")
 
 if __name__ == '__main__':
