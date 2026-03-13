@@ -265,8 +265,9 @@ def export_conjugation_patterns_and_irregulars(vocab_words=None):
 # 3 & 4. MEDICAL VOCABULARY & PHRASES
 # ============================================================
 MED_PHRASE = re.compile(
-    r'^-\s+\*\*(.+?)\*\*\s*—\s*(.+)$'
+    r'^-\s+\*\*(.+?)\*\*\s*—\s*(.+?)(?:\s*\{(\d)\})?\s*$'
 )
+DEFAULT_FREQ = 3  # Default frequency tier if not tagged
 
 def harvest_medical_content():
     """Extract medical vocab and phrases from Verbos/ Medical Context sections."""
@@ -299,6 +300,7 @@ def harvest_medical_content():
                 if m:
                     spanish = m.group(1).strip()
                     english = m.group(2).strip()
+                    freq = int(m.group(3)) if m.group(3) else DEFAULT_FREQ
 
                     # Skip duplicates
                     sp_clean = spanish.lower().replace('¿', '').replace('?', '').strip()
@@ -312,7 +314,8 @@ def harvest_medical_content():
                         'es': spanish,
                         'en': english,
                         'category': current_category,
-                        'source': md_file.stem
+                        'source': md_file.stem,
+                        'freq': freq
                     })
 
     # Also check Español Médico/ folder for dedicated files
@@ -325,13 +328,15 @@ def harvest_medical_content():
             category = md_file.stem  # filename as category
 
             # Command/instruction files → phrases; everything else → vocab
-            is_phrases = 'Commands' in md_file.stem or 'Instructions' in md_file.stem
+            is_phrases = ('Commands' in md_file.stem or 'Instructions' in md_file.stem
+                          or 'Phrases' in md_file.stem or 'Consent' in md_file.stem)
 
             for line in text.split('\n'):
                 m = MED_PHRASE.match(line)
                 if m:
                     spanish = m.group(1).strip()
                     english = m.group(2).strip()
+                    freq = int(m.group(3)) if m.group(3) else DEFAULT_FREQ
                     sp_clean = spanish.lower().replace('¿', '').replace('?', '').strip()
                     if sp_clean in seen_spanish:
                         continue
@@ -342,7 +347,8 @@ def harvest_medical_content():
                         'es': spanish,
                         'en': english,
                         'category': category,
-                        'source': md_file.stem
+                        'source': md_file.stem,
+                        'freq': freq
                     })
 
     # Also check ClinicalKB for Spanish Clinical Questions
@@ -383,7 +389,8 @@ def harvest_medical_content():
                         'es': spanish,
                         'en': english,
                         'category': 'ED Vocabulary',
-                        'source': 'Spanish Clinical Questions'
+                        'source': 'Spanish Clinical Questions',
+                        'freq': 2
                     })
                 continue
 
@@ -408,22 +415,34 @@ def harvest_medical_content():
                     'es': spanish,
                     'en': english,
                     'category': current_category,
-                    'source': 'Spanish Clinical Questions'
+                    'source': 'Spanish Clinical Questions',
+                    'freq': 2
                 })
 
         clinical_count = sum(1 for p in med_phrases if p['source'] == 'Spanish Clinical Questions')
         clinical_vocab = sum(1 for v in med_vocab if v['source'] == 'Spanish Clinical Questions')
         print(f"  Clinical Spanish: {clinical_count} phrases, {clinical_vocab} vocab terms")
 
-    print(f"  Medical Vocab: {len(med_vocab)} terms")
-    print(f"  Medical Phrases: {len(med_phrases)} phrases")
+    # Sort by frequency tier (1=most common first)
+    med_vocab.sort(key=lambda x: x.get('freq', DEFAULT_FREQ))
+    med_phrases.sort(key=lambda x: x.get('freq', DEFAULT_FREQ))
+
+    # Print frequency distribution
+    for label, items in [('Medical Vocab', med_vocab), ('Medical Phrases', med_phrases)]:
+        freq_counts = {}
+        for item in items:
+            f = item.get('freq', DEFAULT_FREQ)
+            freq_counts[f] = freq_counts.get(f, 0) + 1
+        dist = ', '.join(f'T{k}:{v}' for k, v in sorted(freq_counts.items()))
+        print(f"  {label}: {len(items)} items ({dist})")
+
     return med_vocab, med_phrases
 
 # ============================================================
 # 5. EXPRESSIONS
 # ============================================================
 EXPR_PATTERN = re.compile(
-    r'^-\s+\*\*(.+?)\*\*\s*—\s*(.+)$'
+    r'^-\s+\*\*(.+?)\*\*\s*—\s*(.+?)(?:\s*\{(\d)\})?\s*$'
 )
 
 def export_expressions():
@@ -460,13 +479,16 @@ def export_expressions():
                     continue
                 seen.add(sp_clean)
 
+                freq = int(m.group(3)) if m.group(3) else DEFAULT_FREQ
                 expressions.append({
                     'es': spanish,
                     'en': english,
                     'category': current_section,
-                    'source': md_file.stem
+                    'source': md_file.stem,
+                    'freq': freq
                 })
 
+    expressions.sort(key=lambda x: x.get('freq', DEFAULT_FREQ))
     print(f"  Expressions: {len(expressions)} items")
     return expressions
 

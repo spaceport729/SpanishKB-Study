@@ -111,6 +111,11 @@
     return d.innerHTML;
   }
 
+  var FREQ_LABELS = { 1: ' \u2022 Every patient', 2: ' \u2022 Most shifts', 3: ' \u2022 Regular', 4: ' \u2022 Specialized' };
+  function freqLabel(freq) {
+    return FREQ_LABELS[freq] || '';
+  }
+
   // ============================================================
   // DECK ENGINE
   // ============================================================
@@ -497,15 +502,15 @@
 
     } else if (mode === 'medvocab') {
       prompt.textContent = item.en;
-      hint.textContent = item.category || '';
+      hint.textContent = (item.category || '') + freqLabel(item.freq);
 
     } else if (mode === 'medphrase') {
       prompt.textContent = item.en;
-      hint.textContent = item.category || '';
+      hint.textContent = (item.category || '') + freqLabel(item.freq);
 
     } else if (mode === 'expressions') {
       prompt.textContent = item.en;
-      hint.textContent = item.category || '';
+      hint.textContent = (item.category || '') + freqLabel(item.freq);
     }
   }
 
@@ -748,7 +753,7 @@
     var html = '';
     var hasAny = false;
 
-    ['vocab', 'conjugation', 'medvocab', 'medphrase'].forEach(function (mode) {
+    ['vocab', 'patterns', 'irregulars', 'medvocab', 'medphrase', 'expressions'].forEach(function (mode) {
       var cfg = MODE_CONFIG[mode];
       var items = cfg.getItems(DATA);
       if (!items || items.length === 0) return;
