@@ -1,7 +1,7 @@
 """
 Spanish Verb Conjugation Engine
 Generates conjugations for regular, stem-changing, spelling-change, and irregular verbs.
-Covers 6 tenses × 6 persons = up to 36 forms per verb.
+Covers 8 tenses (6 standard × 6 persons + imperative × 5 persons + present perfect × 6 persons).
 """
 
 # ============================================================
@@ -407,6 +407,62 @@ FUTURE_STEMS = {
 
 
 # ============================================================
+# IMPERATIVE (command forms)
+# ============================================================
+# Imperative has 5 persons: tú, Ud., nosotros, vosotros, Uds. (no yo)
+# tú affirmative = 3rd person singular present (for regulars)
+# Ud./Uds./nosotros = subjunctive forms
+# vosotros = infinitive stem + ad/ed/id
+IMPERATIVE_IRREGULARS_TU = {
+    'tener': 'ten', 'venir': 'ven', 'poner': 'pon', 'salir': 'sal',
+    'hacer': 'haz', 'decir': 'di', 'ser': 'sé', 'ir': 've',
+}
+
+# ============================================================
+# PAST PARTICIPLES (for present perfect: haber + participle)
+# ============================================================
+IRREGULAR_PARTICIPLES = {
+    'abrir': 'abierto', 'cubrir': 'cubierto', 'decir': 'dicho',
+    'escribir': 'escrito', 'hacer': 'hecho', 'morir': 'muerto',
+    'poner': 'puesto', 'resolver': 'resuelto', 'romper': 'roto',
+    'ver': 'visto', 'volver': 'vuelto', 'satisfacer': 'satisfecho',
+    'imprimir': 'impreso', 'freír': 'frito', 'proveer': 'provisto',
+}
+
+# Compounds inherit irregular participles
+COMPOUND_PARTICIPLES = {
+    'descubrir': 'descubierto', 'devolver': 'devuelto', 'envolver': 'envuelto',
+    'revolver': 'revuelto', 'deshacer': 'deshecho', 'rehacer': 'rehecho',
+    'componer': 'compuesto', 'disponer': 'dispuesto', 'exponer': 'expuesto',
+    'imponer': 'impuesto', 'oponer': 'opuesto', 'proponer': 'propuesto',
+    'reponer': 'repuesto', 'suponer': 'supuesto', 'predecir': 'predicho',
+    'contradecir': 'contradicho', 'bendecir': 'bendecido',  # regularized
+    'maldecir': 'maldecido',  # regularized
+    'describir': 'descrito', 'inscribir': 'inscrito', 'prescribir': 'prescrito',
+    'suscribir': 'suscrito', 'transcribir': 'transcrito',
+}
+
+def get_past_participle(infinitive):
+    """Get past participle for a verb."""
+    base = infinitive[:-2] if infinitive.endswith('se') else infinitive
+    # Check irregular
+    if base in IRREGULAR_PARTICIPLES:
+        return IRREGULAR_PARTICIPLES[base]
+    if base in COMPOUND_PARTICIPLES:
+        return COMPOUND_PARTICIPLES[base]
+    # Regular: -ar → -ado, -er/-ir → -ido
+    group = get_verb_group(base)
+    stem = get_stem(base, group)
+    if group == 'ar':
+        return stem + 'ado'
+    else:
+        return stem + 'ido'
+
+# Present forms of haber (auxiliary)
+HABER_PRESENT = ['he', 'has', 'ha', 'hemos', 'habéis', 'han']
+
+
+# ============================================================
 # MAIN CONJUGATION FUNCTION
 # ============================================================
 def get_verb_group(infinitive):
@@ -449,10 +505,69 @@ def conjugate(infinitive):
 
     stem = get_stem(base_inf, group)
     result = {}
-    tenses = ['presente', 'pretérito', 'imperfecto', 'futuro', 'condicional', 'subjuntivo']
+    tenses = ['presente', 'pretérito', 'imperfecto', 'futuro', 'condicional', 'subjuntivo', 'imperativo', 'presente perfecto']
 
     for tense in tenses:
         forms = [None] * 6
+
+        # 0a. Present perfect: haber + past participle
+        if tense == 'presente perfecto':
+            participle = get_past_participle(base_inf)
+            for i, haber_form in enumerate(HABER_PRESENT):
+                forms[i] = haber_form + ' ' + participle
+            result[tense] = dict(zip(PERSONS, forms))
+            continue
+
+        # 0b. Imperative: build from present/subjunctive forms
+        if tense == 'imperativo':
+            # We need subjunctive and present forms first — get them via recursion-free approach
+            # tú (affirmative): irregular or 3rd person singular present
+            if base_inf in IMPERATIVE_IRREGULARS_TU:
+                tu_form = IMPERATIVE_IRREGULARS_TU[base_inf]
+            elif base_irregular and base_irregular in IMPERATIVE_IRREGULARS_TU:
+                tu_form = compound_prefix + IMPERATIVE_IRREGULARS_TU[base_irregular]
+            else:
+                # Regular tú imperative = 3rd person singular present
+                # We need to compute this — get presente él form
+                if 'presente' in result:
+                    tu_form = result['presente'][PERSONS[2]]  # él/ella form
+                else:
+                    # Fallback: compute it
+                    s = stem
+                    sc_type = STEM_CHANGERS.get(base_inf)
+                    if sc_type:
+                        s = apply_stem_change(s, sc_type)
+                    tu_form = s + REGULAR['presente'][group][2]
+
+            # Ud. = subjunctive él form
+            # nosotros = subjunctive nosotros
+            # Uds. = subjunctive ellos
+            if 'subjuntivo' in result:
+                ud_form = result['subjuntivo'][PERSONS[2]]
+                nos_form = result['subjuntivo'][PERSONS[3]]
+                uds_form = result['subjuntivo'][PERSONS[5]]
+            else:
+                # Fallback: use regular subjunctive endings
+                subj_endings = REGULAR['subjuntivo'][group]
+                s = stem
+                s_subj = spelling_fix_subjuntivo(s, group)
+                ud_form = s_subj + subj_endings[2]
+                nos_form = s_subj + subj_endings[3]
+                uds_form = s_subj + subj_endings[5]
+
+            # vosotros = stem + ad/ed/id (always regular)
+            vos_ending = {'ar': 'ad', 'er': 'ed', 'ir': 'id'}[group]
+            vos_form = stem + vos_ending
+
+            # Map to PERSONS array: yo=—, tú, él(Ud.), nosotros, vosotros, ellos(Uds.)
+            forms[0] = '—'  # no yo form
+            forms[1] = tu_form
+            forms[2] = ud_form
+            forms[3] = nos_form
+            forms[4] = vos_form
+            forms[5] = uds_form
+            result[tense] = dict(zip(PERSONS, forms))
+            continue
 
         # 1. Check full irregular override
         irr_verb = base_inf
@@ -560,11 +675,12 @@ def conjugate_to_cards(infinitive, english='', rank=9999):
         return []
 
     cards = []
-    tense_order = ['presente', 'pretérito', 'imperfecto', 'futuro', 'condicional', 'subjuntivo']
+    tense_order = ['presente', 'pretérito', 'imperfecto', 'futuro', 'condicional', 'subjuntivo', 'imperativo', 'presente perfecto']
     # Tense priority: presente first (most useful), then past tenses, then rest
     tense_priority = {
         'presente': 0, 'pretérito': 1, 'imperfecto': 2,
-        'futuro': 3, 'condicional': 4, 'subjuntivo': 5
+        'futuro': 3, 'condicional': 4, 'subjuntivo': 5,
+        'imperativo': 6, 'presente perfecto': 7
     }
 
     for tense in tense_order:
@@ -572,7 +688,7 @@ def conjugate_to_cards(infinitive, english='', rank=9999):
             continue
         for pi, person in enumerate(PERSONS):
             form = forms[tense].get(person)
-            if form:
+            if form and form != '—':
                 # Sort key: verb frequency first, then tense priority, then person
                 sort_key = rank * 100 + tense_priority.get(tense, 9) * 10 + pi
                 cards.append({
