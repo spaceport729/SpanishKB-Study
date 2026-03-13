@@ -33,10 +33,15 @@
             <div class="mode-name">Vocab Flash</div>
             <div class="mode-progress" id="home-vocab-progress">0 / 5,000</div>
           </button>
-          <button class="mode-card" onclick="SKB.startMode('conjugation')">
-            <div class="mode-icon">&#9999;</div>
-            <div class="mode-name">Verb Drill</div>
-            <div class="mode-progress" id="home-conj-progress">0 / 0</div>
+          <button class="mode-card" onclick="SKB.startMode('patterns')">
+            <div class="mode-icon">&#128292;</div>
+            <div class="mode-name">Verb Patterns</div>
+            <div class="mode-progress" id="home-patterns-progress">0 / 0</div>
+          </button>
+          <button class="mode-card" onclick="SKB.startMode('irregulars')">
+            <div class="mode-icon">&#9889;</div>
+            <div class="mode-name">Irregular Verbs</div>
+            <div class="mode-progress" id="home-irregulars-progress">0 / 0</div>
           </button>
           <button class="mode-card" onclick="SKB.startMode('medvocab')">
             <div class="mode-icon">&#127973;</div>
@@ -54,6 +59,9 @@
             <div class="mode-progress" id="home-expr-progress">0 / 0</div>
           </button>
         </div>
+        <button class="grammar-btn" onclick="SKB.showView('grammar')">
+          &#128214; Grammar Cheat Sheet
+        </button>
       </div>
 
       <!-- PRACTICE VIEW -->
@@ -98,12 +106,21 @@
       <div id="view-settings" class="view">
         <div id="settings-content"></div>
       </div>
+
+      <!-- GRAMMAR REFERENCE VIEW -->
+      <div id="view-grammar" class="view">
+        <div id="grammar-content" class="grammar-content"></div>
+      </div>
     </main>
 
     <nav id="navbar">
       <button class="nav-btn active" data-view="home" onclick="SKB.showView('home')">
         <span class="nav-icon">&#127968;</span>
         <span class="nav-label">Home</span>
+      </button>
+      <button class="nav-btn" data-view="grammar" onclick="SKB.showView('grammar')">
+        <span class="nav-icon">&#128214;</span>
+        <span class="nav-label">Grammar</span>
       </button>
       <button class="nav-btn" data-view="progress" onclick="SKB.showView('progress')">
         <span class="nav-icon">&#128200;</span>
@@ -116,7 +133,7 @@
     </nav>
   </div>
 
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(function(){});

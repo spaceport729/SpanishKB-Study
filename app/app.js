@@ -1,6 +1,6 @@
 /* ============================================================
    SpanishKB Study PWA — App Logic
-   Adaptive deck engine with 5 practice modes
+   Adaptive deck engine with 6 practice modes + grammar reference
    ============================================================ */
 (function () {
   'use strict';
@@ -22,13 +22,21 @@
       getId: function (item) { return String(item.rank); },
       getItems: function (data) { return data.words || []; }
     },
-    conjugation: {
-      namespace: 'conj',
-      label: 'Verb Drill',
-      icon: '\u270F\uFE0F',
+    patterns: {
+      namespace: 'patterns',
+      label: 'Verb Patterns',
+      icon: '\uD83D\uDD24',
       defaultDeck: 15,
       getId: function (item) { return item.id; },
-      getItems: function (data) { return data.conjugations || []; }
+      getItems: function (data) { return data.conjugationPatterns || []; }
+    },
+    irregulars: {
+      namespace: 'irregulars',
+      label: 'Irregular Verbs',
+      icon: '\u26A1',
+      defaultDeck: 15,
+      getId: function (item) { return item.id; },
+      getItems: function (data) { return data.conjugationIrregulars || []; }
     },
     medvocab: {
       namespace: 'medvocab',
@@ -343,6 +351,7 @@
     if (name === 'home') renderHome();
     else if (name === 'progress') renderProgress();
     else if (name === 'settings') renderSettings();
+    else if (name === 'grammar') renderGrammar();
   }
 
   function goHome() {
@@ -374,7 +383,8 @@
     // Mode card progress counts
     var modeMap = {
       vocab:       'home-vocab-progress',
-      conjugation: 'home-conj-progress',
+      patterns:    'home-patterns-progress',
+      irregulars:  'home-irregulars-progress',
       medvocab:    'home-medvocab-progress',
       medphrase:   'home-medphrase-progress',
       expressions: 'home-expr-progress'
@@ -470,7 +480,15 @@
       prompt.textContent = item.en;
       hint.textContent = settings.showType ? item.type : '';
 
-    } else if (mode === 'conjugation') {
+    } else if (mode === 'patterns') {
+      prompt.innerHTML =
+        '<span style="font-size:22px;color:var(--accent)">' +
+        escapeHtml(item.group) + '</span><br>' +
+        '<span style="font-size:18px">' +
+        escapeHtml(item.tense) + ' \u00B7 ' + escapeHtml(item.person) + '</span>';
+      hint.textContent = 'What\u2019s the ending?';
+
+    } else if (mode === 'irregulars') {
       prompt.innerHTML =
         '<span style="font-size:18px;color:var(--text-muted)">' +
         escapeHtml(item.verbEn || item.verb) + '</span><br>' +
@@ -508,7 +526,14 @@
         example.style.display = 'none';
       }
 
-    } else if (mode === 'conjugation') {
+    } else if (mode === 'patterns') {
+      answer.innerHTML = '<span style="font-size:28px;color:var(--accent)">' +
+                         escapeHtml(item.ending) + '</span>';
+      detail.textContent = item.example;
+      example.textContent = item.exampleEn || '';
+      example.style.display = item.exampleEn ? '' : 'none';
+
+    } else if (mode === 'irregulars') {
       answer.textContent = item.form;
       detail.textContent = item.verb + ' \u00B7 ' + item.tense +
                            ' \u00B7 ' + item.person;
@@ -861,6 +886,17 @@
 
       '<div class="setting-group">' +
       '<h2>Data</h2>' +
+      '<button class="btn-secondary" onclick="SKB.exportProgress()" style="margin-bottom:8px">' +
+      '\uD83D\uDCE4 Export Progress</button>' +
+      '<button class="btn-secondary" onclick="SKB.importProgress()">' +
+      '\uD83D\uDCE5 Import Progress</button>' +
+      '<input type="file" id="import-file" accept=".json" style="display:none" ' +
+      'onchange="SKB.handleImportFile(this)">' +
+      '<div id="backup-status" style="color:var(--accent);font-size:13px;margin-top:8px"></div>' +
+      '</div>' +
+
+      '<div class="setting-group">' +
+      '<h2>Danger Zone</h2>' +
       '<button class="btn-danger" onclick="SKB.resetProgress()">' +
       'Reset All Progress</button>' +
       '</div>';
@@ -914,6 +950,158 @@
   }
 
   // ============================================================
+  // PROGRESS EXPORT / IMPORT
+  // ============================================================
+  function exportProgress() {
+    var backup = {};
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (key.startsWith(PREFIX)) {
+        backup[key] = localStorage.getItem(key);
+      }
+    }
+    var json = JSON.stringify(backup, null, 2);
+    var blob = new Blob([json], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'spanishkb-progress-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    var status = document.getElementById('backup-status');
+    if (status) status.textContent = '\u2705 Progress exported!';
+  }
+
+  function importProgress() {
+    document.getElementById('import-file').click();
+  }
+
+  function handleImportFile(input) {
+    var file = input.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        var backup = JSON.parse(e.target.result);
+        var count = 0;
+        Object.keys(backup).forEach(function (key) {
+          if (key.startsWith(PREFIX)) {
+            localStorage.setItem(key, backup[key]);
+            count++;
+          }
+        });
+        engines = {};  // Reset in-memory engines to pick up imported data
+        var status = document.getElementById('backup-status');
+        if (status) status.textContent = '\u2705 Imported ' + count + ' keys! Refreshing...';
+        setTimeout(function () { location.reload(); }, 1000);
+      } catch (err) {
+        alert('Invalid backup file: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    input.value = '';  // Reset so same file can be re-imported
+  }
+
+  // ============================================================
+  // GRAMMAR REFERENCE VIEW
+  // ============================================================
+  function renderGrammar() {
+    var container = document.getElementById('grammar-content');
+    if (!container) return;
+
+    if (!DATA || !DATA.grammarNotes || DATA.grammarNotes.length === 0) {
+      container.innerHTML = '<p style="color:var(--text-muted)">No grammar notes found.</p>';
+      return;
+    }
+
+    var html = '';
+    DATA.grammarNotes.forEach(function (section) {
+      html += '<div class="grammar-section">';
+      html += '<h2>' + escapeHtml(section.title) + '</h2>';
+      // Convert markdown to basic HTML
+      html += markdownToHtml(section.content);
+      html += '</div>';
+    });
+    container.innerHTML = html;
+  }
+
+  function markdownToHtml(md) {
+    var lines = md.split('\n');
+    var html = '';
+    var inTable = false;
+    var inList = false;
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+
+      // Horizontal rule
+      if (line.trim() === '---') {
+        if (inList) { html += '</ul>'; inList = false; }
+        if (inTable) { html += '</table>'; inTable = false; }
+        html += '<hr>';
+        continue;
+      }
+
+      // Headers
+      if (line.startsWith('### ')) {
+        if (inList) { html += '</ul>'; inList = false; }
+        if (inTable) { html += '</table>'; inTable = false; }
+        html += '<h4>' + inlineFormat(line.slice(4)) + '</h4>';
+        continue;
+      }
+
+      // Table rows
+      if (line.trim().startsWith('|')) {
+        if (inList) { html += '</ul>'; inList = false; }
+        // Skip separator rows
+        if (/^\|\s*-/.test(line)) continue;
+        var cells = line.split('|').filter(function (c) { return c.trim() !== ''; });
+        if (!inTable) {
+          html += '<table class="grammar-table"><tr>';
+          cells.forEach(function (c) { html += '<th>' + inlineFormat(c.trim()) + '</th>'; });
+          html += '</tr>';
+          inTable = true;
+        } else {
+          html += '<tr>';
+          cells.forEach(function (c) { html += '<td>' + inlineFormat(c.trim()) + '</td>'; });
+          html += '</tr>';
+        }
+        continue;
+      }
+      if (inTable) { html += '</table>'; inTable = false; }
+
+      // List items
+      if (line.startsWith('- ')) {
+        if (!inList) { html += '<ul>'; inList = true; }
+        html += '<li>' + inlineFormat(line.slice(2)) + '</li>';
+        continue;
+      }
+      if (inList) { html += '</ul>'; inList = false; }
+
+      // Empty lines
+      if (line.trim() === '') {
+        continue;
+      }
+
+      // Regular paragraph
+      html += '<p>' + inlineFormat(line) + '</p>';
+    }
+    if (inList) html += '</ul>';
+    if (inTable) html += '</table>';
+    return html;
+  }
+
+  function inlineFormat(text) {
+    // Bold
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Code
+    text = text.replace(/`(.+?)`/g, '<code>$1</code>');
+    // Em dash
+    text = text.replace(/ — /g, ' \u2014 ');
+    return text;
+  }
+
+  // ============================================================
   // DARK MODE
   // ============================================================
   function loadDarkMode() {
@@ -964,7 +1152,8 @@
         DATA = data;
         console.log('SpanishKB Study loaded:',
           (data.words || []).length, 'words,',
-          (data.conjugations || []).length, 'conjugations,',
+          (data.conjugationPatterns || []).length, 'patterns,',
+          (data.conjugationIrregulars || []).length, 'irregulars,',
           (data.medicalVocab || []).length, 'med vocab,',
           (data.medicalPhrases || []).length, 'med phrases');
         renderHome();
@@ -981,15 +1170,18 @@
   // PUBLIC API (used by HTML onclick handlers)
   // ============================================================
   window.SKB = {
-    showView:       showView,
-    startMode:      startMode,
-    flipCard:       flipCard,
-    rate:           rate,
-    goHome:         goHome,
-    toggleDark:     toggleDark,
-    updateSetting:  updateSetting,
-    toggleSetting:  toggleSetting,
-    resetProgress:  resetProgress
+    showView:         showView,
+    startMode:        startMode,
+    flipCard:         flipCard,
+    rate:             rate,
+    goHome:           goHome,
+    toggleDark:       toggleDark,
+    updateSetting:    updateSetting,
+    toggleSetting:    toggleSetting,
+    resetProgress:    resetProgress,
+    exportProgress:   exportProgress,
+    importProgress:   importProgress,
+    handleImportFile: handleImportFile
   };
 
   // Boot

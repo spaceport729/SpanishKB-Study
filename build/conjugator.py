@@ -665,6 +665,13 @@ def conjugate(infinitive):
     return result
 
 
+TENSE_ORDER = ['presente', 'pretérito', 'imperfecto', 'futuro', 'condicional', 'subjuntivo', 'imperativo', 'presente perfecto']
+TENSE_PRIORITY = {
+    'presente': 0, 'pretérito': 1, 'imperfecto': 2,
+    'futuro': 3, 'condicional': 4, 'subjuntivo': 5,
+    'imperativo': 6, 'presente perfecto': 7
+}
+
 def conjugate_to_cards(infinitive, english='', rank=9999):
     """
     Generate study cards for a verb.
@@ -675,22 +682,13 @@ def conjugate_to_cards(infinitive, english='', rank=9999):
         return []
 
     cards = []
-    tense_order = ['presente', 'pretérito', 'imperfecto', 'futuro', 'condicional', 'subjuntivo', 'imperativo', 'presente perfecto']
-    # Tense priority: presente first (most useful), then past tenses, then rest
-    tense_priority = {
-        'presente': 0, 'pretérito': 1, 'imperfecto': 2,
-        'futuro': 3, 'condicional': 4, 'subjuntivo': 5,
-        'imperativo': 6, 'presente perfecto': 7
-    }
-
-    for tense in tense_order:
+    for tense in TENSE_ORDER:
         if tense not in forms:
             continue
         for pi, person in enumerate(PERSONS):
             form = forms[tense].get(person)
             if form and form != '—':
-                # Sort key: verb frequency first, then tense priority, then person
-                sort_key = rank * 100 + tense_priority.get(tense, 9) * 10 + pi
+                sort_key = rank * 100 + TENSE_PRIORITY.get(tense, 9) * 10 + pi
                 cards.append({
                     'verb': infinitive,
                     'verbEn': english,
@@ -702,3 +700,205 @@ def conjugate_to_cards(infinitive, english='', rank=9999):
                     'id': f"{infinitive}-{tense}-{person}"
                 })
     return cards
+
+
+def is_verb_irregular(infinitive):
+    """Check if a verb has ANY irregular forms."""
+    base = infinitive[:-2] if infinitive.endswith('se') else infinitive
+    if base in IRREGULARS:
+        return True
+    if base in STEM_CHANGERS:
+        return True
+    if base in COMPOUNDS:
+        return True
+    if base in GO_VERBS:
+        return True
+    if base in FUTURE_STEMS:
+        return True
+    if base in IRREGULAR_PARTICIPLES or base in COMPOUND_PARTICIPLES:
+        return True
+    if base in IMPERATIVE_IRREGULARS_TU:
+        return True
+    # -cer/-cir → -zco pattern
+    if base.endswith('cer') or base.endswith('cir'):
+        if base not in ('hacer',):  # hacer is in IRREGULARS already
+            return True
+    return False
+
+
+def generate_pattern_cards():
+    """
+    Generate pattern cards for regular verb endings.
+    Each card teaches one ending: group × tense × person.
+    """
+    # Example verbs for each group
+    examples = {
+        'ar': ('hablar', 'to speak'),
+        'er': ('comer', 'to eat'),
+        'ir': ('vivir', 'to live'),
+    }
+
+    cards = []
+    for tense in TENSE_ORDER:
+        for group in ('ar', 'er', 'ir'):
+            ex_verb, ex_en = examples[group]
+            ex_stem = ex_verb[:-2]
+
+            if tense == 'presente perfecto':
+                # Pattern: haber + -ado/-ido
+                participle_ending = '-ado' if group == 'ar' else '-ido'
+                ex_participle = ex_stem + ('ado' if group == 'ar' else 'ido')
+                for pi, person in enumerate(PERSONS):
+                    haber = HABER_PRESENT[pi]
+                    cards.append({
+                        'id': f"{group}-{tense}-{person}",
+                        'group': f"-{group}",
+                        'tense': tense,
+                        'person': person,
+                        'ending': f"{haber} + {participle_ending}",
+                        'example': f"{ex_verb} → {haber} {ex_participle}",
+                        'exampleEn': f"{ex_en} → have {ex_en.replace('to ', '')}+ed",
+                        'sortKey': TENSE_PRIORITY.get(tense, 9) * 100 + pi
+                    })
+                continue
+
+            if tense == 'imperativo':
+                # Regular imperative patterns
+                # tú = 3rd person present
+                pres_endings = REGULAR['presente'][group]
+                subj_endings = REGULAR['subjuntivo'][group]
+                vos_ending = {'ar': 'ad', 'er': 'ed', 'ir': 'id'}[group]
+
+                imp_forms = {
+                    'yo': None,  # skip
+                    'tú': (f"-{pres_endings[2]}", f"{ex_verb} → {ex_stem}{pres_endings[2]}"),
+                    'él/ella/Ud.': (f"-{subj_endings[2]}", f"{ex_verb} → {ex_stem}{subj_endings[2]}"),
+                    'nosotros': (f"-{subj_endings[3]}", f"{ex_verb} → {ex_stem}{subj_endings[3]}"),
+                    'vosotros': (f"-{vos_ending}", f"{ex_verb} → {ex_stem}{vos_ending}"),
+                    'ellos/Uds.': (f"-{subj_endings[5]}", f"{ex_verb} → {ex_stem}{subj_endings[5]}"),
+                }
+                for pi, person in enumerate(PERSONS):
+                    if imp_forms[person] is None:
+                        continue
+                    ending, example = imp_forms[person]
+                    cards.append({
+                        'id': f"{group}-{tense}-{person}",
+                        'group': f"-{group}",
+                        'tense': tense,
+                        'person': person,
+                        'ending': ending,
+                        'example': example,
+                        'exampleEn': ex_en,
+                        'sortKey': TENSE_PRIORITY.get(tense, 9) * 100 + pi
+                    })
+                continue
+
+            if tense in ('futuro', 'condicional'):
+                # Future/conditional: infinitive + ending (same for all groups)
+                endings = REGULAR[tense][group]
+                for pi, person in enumerate(PERSONS):
+                    ending = endings[pi]
+                    cards.append({
+                        'id': f"{group}-{tense}-{person}",
+                        'group': f"-{group}",
+                        'tense': tense,
+                        'person': person,
+                        'ending': f"-{ending}",
+                        'example': f"{ex_verb} → {ex_verb}{ending}",
+                        'exampleEn': ex_en,
+                        'sortKey': TENSE_PRIORITY.get(tense, 9) * 100 + pi
+                    })
+                continue
+
+            # Standard tenses: stem + ending
+            endings = REGULAR[tense][group]
+            for pi, person in enumerate(PERSONS):
+                ending = endings[pi]
+                cards.append({
+                    'id': f"{group}-{tense}-{person}",
+                    'group': f"-{group}",
+                    'tense': tense,
+                    'person': person,
+                    'ending': f"-{ending}",
+                    'example': f"{ex_verb} → {ex_stem}{ending}",
+                    'exampleEn': ex_en,
+                    'sortKey': TENSE_PRIORITY.get(tense, 9) * 100 + pi
+                })
+
+    return sorted(cards, key=lambda c: c['sortKey'])
+
+
+def conjugate_to_irregular_cards(infinitive, english='', rank=9999):
+    """
+    Generate study cards ONLY for irregular forms of a verb.
+    Skips forms that follow regular patterns.
+    """
+    if not is_verb_irregular(infinitive):
+        return []
+
+    forms = conjugate(infinitive)
+    if not forms:
+        return []
+
+    base = infinitive[:-2] if infinitive.endswith('se') else infinitive
+    group = get_verb_group(base)
+    if not group:
+        return []
+    stem = get_stem(base, group)
+
+    cards = []
+    for tense in TENSE_ORDER:
+        if tense not in forms:
+            continue
+        for pi, person in enumerate(PERSONS):
+            form = forms[tense].get(person)
+            if not form or form == '—':
+                continue
+
+            # Compute what the regular form WOULD be
+            regular_form = _get_regular_form(base, group, stem, tense, pi)
+
+            # If the actual form differs from regular, it's irregular → make a card
+            if form != regular_form:
+                sort_key = rank * 100 + TENSE_PRIORITY.get(tense, 9) * 10 + pi
+                cards.append({
+                    'verb': infinitive,
+                    'verbEn': english,
+                    'tense': tense,
+                    'person': person,
+                    'form': form,
+                    'rank': rank,
+                    'sortKey': sort_key,
+                    'id': f"{infinitive}-{tense}-{person}"
+                })
+    return cards
+
+
+def _get_regular_form(infinitive, group, stem, tense, person_idx):
+    """Compute what the regular (non-irregular) form would be."""
+    if tense == 'presente perfecto':
+        haber = HABER_PRESENT[person_idx]
+        if group == 'ar':
+            return haber + ' ' + stem + 'ado'
+        else:
+            return haber + ' ' + stem + 'ido'
+
+    if tense == 'imperativo':
+        if person_idx == 0:
+            return '—'
+        if person_idx == 1:  # tú = 3rd person present
+            return stem + REGULAR['presente'][group][2]
+        if person_idx == 4:  # vosotros always regular
+            vos_ending = {'ar': 'ad', 'er': 'ed', 'ir': 'id'}[group]
+            return stem + vos_ending
+        # Ud./nosotros/Uds. = subjunctive (which may itself be irregular)
+        subj_endings = REGULAR['subjuntivo'][group]
+        return stem + subj_endings[person_idx]
+
+    if tense in ('futuro', 'condicional'):
+        endings = REGULAR[tense][group]
+        return infinitive + endings[person_idx]
+
+    # Standard tenses
+    endings = REGULAR[tense][group]
+    return stem + endings[person_idx]

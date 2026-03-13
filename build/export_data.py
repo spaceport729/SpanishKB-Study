@@ -3,12 +3,14 @@
 SpanishKB Study PWA — Data Export Script
 Parses SpanishKB vault and exports data.json for the study app.
 
-Exports five data types:
-  1. words        — 5,000 frequency-ranked vocabulary from Vocabulario/*.md
-  2. conjugations — verb conjugation cards from Verbos/*.md
-  3. medicalVocab — medical vocabulary from Español Médico/ anatomy files
-  4. medicalPhrases — clinical phrases from Verbos/ + ClinicalKB
-  5. expressions  — idioms, conversational phrases, fillers from Expresiones files
+Exports seven data types:
+  1. words               — 5,000 frequency-ranked vocabulary from Vocabulario/*.md
+  2. conjugationPatterns  — regular verb ending patterns (~141 cards)
+  3. conjugationIrregulars — irregular verb forms only (~3,000 cards)
+  4. medicalVocab        — medical vocabulary from Español Médico/ anatomy files
+  5. medicalPhrases      — clinical phrases from Verbos/ + ClinicalKB
+  6. expressions         — idioms, conversational phrases, fillers
+  7. grammarNotes        — grammar reference content from Grammar Notes.md
 """
 
 import json
@@ -214,87 +216,50 @@ def parse_verb_file(filepath):
 
     return verb_name, cards
 
-def export_conjugations(vocab_words=None):
+def export_conjugation_patterns_and_irregulars(vocab_words=None):
     """
-    Generate conjugation cards from two sources:
-    1. Hand-written Verbos/*.md files (highest priority, verified forms)
-    2. Auto-conjugated verbs from vocabulary (using conjugation engine)
+    Generate two sets of conjugation cards:
+    1. Pattern cards — regular endings (~141 cards, teach the rules)
+    2. Irregular cards — only forms that deviate from regular (~3,000 cards)
     """
-    from conjugator import conjugate_to_cards, get_verb_group
+    from conjugator import (
+        generate_pattern_cards, conjugate_to_irregular_cards,
+        get_verb_group, is_verb_irregular
+    )
 
-    all_cards = []
-    hand_written_verbs = set()
+    # --- Pattern cards ---
+    patterns = generate_pattern_cards()
+    print(f"  Conjugation patterns: {len(patterns)} cards")
 
-    # Build verb→rank lookup from vocabulary
-    verb_ranks = {}
+    # --- Irregular cards from vocabulary verbs ---
+    irregulars = []
     if vocab_words:
-        for w in vocab_words:
-            if w.get('type') in ('v', 'v/aux'):
-                inf = w['es'].split(',')[0].strip().lower()
-                verb_ranks[inf] = w.get('rank', 9999)
-
-    # --- Source 1: Hand-written verb files ---
-    if VERBOS_PATH.exists():
-        skip_files = {
-            'regular -ar verbs.md', 'regular -er verbs.md', 'regular -ir verbs.md',
-            'stem-changing verbs.md', 'spelling-change verbs.md', 'reflexive verbs.md'
-        }
-        for md_file in sorted(VERBOS_PATH.glob("*.md")):
-            if md_file.name.lower() in skip_files:
-                continue
-            verb_name, cards = parse_verb_file(md_file)
-            if cards:
-                # Assign frequency rank to hand-written cards too
-                rank = verb_ranks.get(verb_name, 9999)
-                tense_priority = {
-                    'presente': 0, 'pretérito': 1, 'imperfecto': 2,
-                    'futuro': 3, 'condicional': 4, 'subjuntivo': 5
-                }
-                person_idx = {p: i for i, p in enumerate(
-                    ['yo', 'tú', 'él/ella/Ud.', 'nosotros', 'vosotros', 'ellos/Uds.']
-                )}
-                for c in cards:
-                    c['rank'] = rank
-                    c['sortKey'] = rank * 100 + tense_priority.get(c['tense'], 9) * 10 + person_idx.get(c['person'], 0)
-                all_cards.extend(cards)
-                hand_written_verbs.add(verb_name)
-        print(f"  Hand-written conjugations: {len(all_cards)} cards from {len(hand_written_verbs)} verbs")
-
-    # --- Source 2: Auto-conjugate verbs from vocabulary ---
-    if vocab_words:
-        auto_count = 0
-        auto_verbs = 0
+        irr_verbs = 0
         for w in vocab_words:
             if w.get('type') not in ('v', 'v/aux'):
                 continue
-            infinitive = w['es'].split(',')[0].strip()  # take first if multiple
-            # Skip if hand-written version exists
-            if infinitive.lower() in hand_written_verbs:
-                continue
-            # Skip if not a valid verb form
+            infinitive = w['es'].split(',')[0].strip()
             if not get_verb_group(infinitive):
                 continue
-            cards = conjugate_to_cards(infinitive, w.get('en', ''), rank=w.get('rank', 9999))
+            cards = conjugate_to_irregular_cards(
+                infinitive, w.get('en', ''), rank=w.get('rank', 9999)
+            )
             if cards:
-                all_cards.extend(cards)
-                auto_verbs += 1
-                auto_count += len(cards)
-        print(f"  Auto-conjugated: {auto_count} cards from {auto_verbs} verbs")
+                irregulars.extend(cards)
+                irr_verbs += 1
 
-    # Sort by frequency rank, then tense priority, then person
-    all_cards.sort(key=lambda c: c.get('sortKey', 999999))
+        irregulars.sort(key=lambda c: c.get('sortKey', 999999))
+        print(f"  Irregular verbs: {irr_verbs} verbs, {len(irregulars)} cards")
+        # Show top irregular verbs
+        seen = []
+        for c in irregulars:
+            if c['verb'] not in seen:
+                seen.append(c['verb'])
+                if len(seen) >= 10:
+                    break
+        print(f"  Top 10 irregular: {', '.join(seen)}")
 
-    total_verbs = len(set(c['verb'] for c in all_cards))
-    print(f"  Total conjugations: {len(all_cards)} cards from {total_verbs} verbs")
-    # Show top verbs for verification
-    seen = []
-    for c in all_cards:
-        if c['verb'] not in seen:
-            seen.append(c['verb'])
-            if len(seen) >= 10:
-                break
-    print(f"  Top 10 by frequency: {', '.join(seen)}")
-    return all_cards
+    return patterns, irregulars
 
 # ============================================================
 # 3 & 4. MEDICAL VOCABULARY & PHRASES
@@ -506,33 +471,85 @@ def export_expressions():
     return expressions
 
 # ============================================================
+# 6. GRAMMAR NOTES
+# ============================================================
+def export_grammar_notes():
+    """Export Grammar Notes.md as structured sections for the reference view."""
+    grammar_file = VAULT_PATH / "Grammar Notes.md"
+    if not grammar_file.exists():
+        print("  Grammar Notes: not found")
+        return []
+
+    text = grammar_file.read_text(encoding='utf-8')
+    sections = []
+    current_section = None
+    current_content = []
+
+    for line in text.split('\n'):
+        # Skip frontmatter
+        if line.strip() == '---':
+            continue
+        if line.startswith('tags:') or line.startswith('# Grammar Notes'):
+            continue
+
+        # New section at ## level
+        if line.startswith('## '):
+            if current_section:
+                sections.append({
+                    'title': current_section,
+                    'content': '\n'.join(current_content).strip()
+                })
+            current_section = line.replace('## ', '').strip()
+            current_content = []
+            continue
+
+        if current_section:
+            current_content.append(line)
+
+    # Don't forget the last section
+    if current_section:
+        sections.append({
+            'title': current_section,
+            'content': '\n'.join(current_content).strip()
+        })
+
+    print(f"  Grammar Notes: {len(sections)} sections")
+    return sections
+
+
+# ============================================================
 # MAIN
 # ============================================================
 def main():
-    print("SpanishKB Study — Data Export")
+    print("SpanishKB Study \u2014 Data Export")
     print("=" * 40)
 
     print("\nExporting...")
     words = export_vocabulary()
-    conjugations = export_conjugations(vocab_words=words)
+    patterns, irregulars = export_conjugation_patterns_and_irregulars(vocab_words=words)
     med_vocab, med_phrases = harvest_medical_content()
     expressions = export_expressions()
+    grammar_notes = export_grammar_notes()
 
     data = {
         'meta': {
             'exportDate': datetime.now().isoformat(),
             'vaultPath': str(VAULT_PATH),
             'totalWords': len(words),
-            'totalConjugations': len(conjugations),
+            'totalPatterns': len(patterns),
+            'totalIrregulars': len(irregulars),
             'totalMedVocab': len(med_vocab),
             'totalMedPhrases': len(med_phrases),
-            'totalExpressions': len(expressions)
+            'totalExpressions': len(expressions),
+            'totalGrammarSections': len(grammar_notes)
         },
         'words': words,
-        'conjugations': conjugations,
+        'conjugationPatterns': patterns,
+        'conjugationIrregulars': irregulars,
         'medicalVocab': med_vocab,
         'medicalPhrases': med_phrases,
-        'expressions': expressions
+        'expressions': expressions,
+        'grammarNotes': grammar_notes
     }
 
     # Write output
@@ -545,10 +562,12 @@ def main():
     print(f"Size: {size_kb:.0f} KB")
     print(f"\nSummary:")
     print(f"  Words:        {len(words):,}")
-    print(f"  Conjugations: {len(conjugations):,}")
+    print(f"  Patterns:     {len(patterns):,}")
+    print(f"  Irregulars:   {len(irregulars):,}")
     print(f"  Med Vocab:    {len(med_vocab):,}")
     print(f"  Med Phrases:  {len(med_phrases):,}")
     print(f"  Expressions:  {len(expressions):,}")
+    print(f"  Grammar:      {len(grammar_notes)} sections")
     print(f"\nDone!")
 
 if __name__ == '__main__':
