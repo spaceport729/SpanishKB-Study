@@ -176,6 +176,28 @@
 
   function ensureDeckFull(engine) {
     var targetSize = settings.deckSize || engine.cfg.defaultDeck;
+
+    // Trim deck if it's larger than the target (user lowered deck size)
+    var deckIds = Object.keys(engine.deck);
+    if (deckIds.length > targetSize) {
+      // Sort by least progress first (lowest streak, least times rated) — trim those
+      deckIds.sort(function (a, b) {
+        var da = engine.deck[a], db = engine.deck[b];
+        return (da.streak + da.timesRated) - (db.streak + db.timesRated);
+      });
+      var toRemove = deckIds.slice(0, deckIds.length - targetSize);
+      toRemove.forEach(function (id) {
+        // Bump removed items so they come back if deck size increases
+        engine.bumped.push({
+          id: id,
+          streak: engine.deck[id].streak,
+          lastSeen: engine.deck[id].lastSeen,
+          timesRated: engine.deck[id].timesRated
+        });
+        delete engine.deck[id];
+      });
+    }
+
     var count = Object.keys(engine.deck).length;
 
     while (count < targetSize) {
@@ -908,7 +930,10 @@
   }
 
   function updateSetting(key, value) {
-    settings[key] = parseInt(value, 10);
+    var num = parseInt(value, 10);
+    // Snap to step of 5 for deck size
+    if (key === 'deckSize') num = Math.round(num / 5) * 5;
+    settings[key] = num;
     lsSet(SETTINGS_KEY, settings);
 
     var labels = {
@@ -916,12 +941,12 @@
       masteryThreshold: 'v-mastery'
     };
     var el = document.getElementById(labels[key]);
-    if (el) el.textContent = value;
+    if (el) el.textContent = num;
 
     // Update mastery checks display when deck size changes
     if (key === 'deckSize') {
       var checksEl = document.getElementById('v-checks');
-      if (checksEl) checksEl.textContent = '~' + Math.max(1, Math.round(value * 0.05)) + ' (5% of deck)';
+      if (checksEl) checksEl.textContent = '~' + Math.max(1, Math.round(num * 0.05)) + ' (5% of deck)';
     }
   }
 
